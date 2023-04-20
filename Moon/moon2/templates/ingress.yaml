@@ -1,0 +1,240 @@
+{{- if .Values.customIngress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    {{- range $key, $value := .Values.customIngress.annotations }}
+      {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ingressClassName: {{ .Values.customIngress.ingressClassName }}
+  {{- if .Values.customIngress.tls }}
+  tls:
+  {{ toYaml .Values.customIngress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+  - host: {{ .Values.customIngress.host }}
+    http:
+      paths:
+      {{- $releaseName := .Release.Name }}
+      {{- range $v := .Values.customIngress.paths }}
+      - path: {{ $v.path | quote }}
+        pathType: {{ $v.type | default "Prefix" }}
+        backend:
+          service:
+            name: {{ $releaseName }}
+            port:
+              number: {{ $v.port }}
+      {{- end }}
+{{- else }}
+{{- if .Values.ingress.enabled }}
+{{- template "check.quota" . }}
+{{- template "check.quota.namespaces" . }}
+{{- template "check.ingress.host" . }}
+
+{{- $basicAuth := include "basic.auth" . }}
+
+{{- if $basicAuth }}
+  {{- range $name, $quota := .Values.quota }}
+    {{- if not $quota.password }}
+      {{- $data := (lookup "v1" "Secret" $quota.namespace (printf "%s-basic-auth-password" $name)).data }}
+      {{- if $data }}
+        {{- $_ := set $quota "password" ($data.password | b64dec) }}
+      {{- else }}
+        {{- $_ := set $quota "password" (randAlphaNum 32)  }}
+      {{- end }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}-basic-auth-password
+  namespace: {{ $quota.namespace }}
+data:
+  password: {{ $quota.password | b64enc }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-basic-auth
+  namespace: {{ .Release.Namespace }}
+stringData:
+  auth: |
+    {{- range $name, $quota := .Values.quota }}
+    {{ htpasswd $name $quota.password }}
+    {{- end }}
+{{- end }}
+
+{{- $tlsSecretName := printf "%s-tls-cert" .Release.Name }}
+{{- $enableTLS := false }}
+{{- $tlsSecretExist := (lookup "v1" "Secret" .Release.Namespace $tlsSecretName) }}
+{{- if $tlsSecretExist }}
+  {{- $enableTLS = true }}
+{{- end }}
+
+{{- if and .Values.ingress.tlsCert .Values.ingress.tlsKey }}
+  {{- $enableTLS = true }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $tlsSecretName }}
+  namespace: {{ .Release.Namespace }}
+data:
+  tls.crt: {{ .Values.ingress.tlsCert | b64enc }}
+  tls.key: {{ .Values.ingress.tlsKey | b64enc }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- if $enableTLS }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    {{- if $basicAuth }}
+    {{- if eq $basicAuth "kubernetes" }}
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ .Release.Name }}-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Moon realm'
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header X-Moon-Quota $remote_user;
+    {{- if .Values.ingress.proxyConnectTimeout }}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: {{ .Values.ingress.proxyConnectTimeout | quote }}
+    {{- end }}
+    {{- if .Values.ingress.proxySendTimeout }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.proxySendTimeout | quote }}
+    {{- end }}
+    {{- if .Values.ingress.proxyReadTimeout }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.proxyReadTimeout | quote }}
+    {{- end }}
+    {{- if .Values.ingress.proxyBodySize }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.proxyBodySize | quote }}
+    {{- end }}
+    {{- else }}
+    haproxy.router.openshift.io/timeout: {{ (printf "%ds" (.Values.ingress.proxyReadTimeout | int)) | quote }}
+    {{- end }}
+    {{- end }}
+    {{- range $key, $value := .Values.ingress.customAnnotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  {{- if $enableTLS }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.host }}
+    secretName: {{ $tlsSecretName }}
+  {{- end }}
+  {{- if not .Values.ingress.openshift }}
+  ingressClassName: nginx
+  {{- end }}
+  rules:
+  - host: {{ .Values.ingress.host }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: 8080
+      {{- if $basicAuth }}
+      - path: /wd/hub/session
+        pathType: Exact
+      {{- else }}
+      - path: /wd/hub
+        pathType: Prefix
+      {{- end }}
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: 4444
+      - path: /cypress
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: 4444
+      - path: /playwright
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: 4444
+      - path: /devtools
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: 4444
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: 4444
+{{- end }}
+{{- if $basicAuth }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-wd-hub-session
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- if eq $basicAuth "kubernetes" }}
+    {{- if .Values.ingress.proxyConnectTimeout }}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: {{ .Values.ingress.proxyConnectTimeout | quote }}
+    {{- end }}
+    {{- if .Values.ingress.proxySendTimeout }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.proxySendTimeout | quote }}
+    {{- end }}
+    {{- if .Values.ingress.proxyReadTimeout }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.proxyReadTimeout | quote }}
+    {{- end }}
+    {{- if .Values.ingress.proxyBodySize }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.proxyBodySize | quote }}
+    {{- end }}
+    {{- else }}
+    haproxy.router.openshift.io/timeout: {{ (printf "%ds" (.Values.ingress.proxyReadTimeout | int)) | quote }}
+    {{- end }}
+    {{- range $key, $value := .Values.ingress.customAnnotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  {{- if not .Values.ingress.openshift }}
+  ingressClassName: nginx
+  {{- end }}
+  {{- if $enableTLS }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.host }}
+    secretName: {{ $tlsSecretName }}
+  {{- end }}
+  rules:
+  - host: {{ .Values.ingress.host }}
+    http:
+      paths:
+      - path: /wd/hub/session/
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: 4444
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,92 @@
+# Purpose
+# -------
+# Stage template that applies a terraform configuration and deploys a function app 
+#
+# Unfortunatley service connections are treated differently in yaml pipelines so have been unable to use a service connection declared in a variable group.
+
+parameters:
+- name: envrionment
+- name: azureServiceConnection
+- name: resourceGroup
+- name: location
+  values:
+  - australiasoutheast
+  - australiaeast
+- name: storageAccount
+- name: container
+- name: tags
+
+stages:
+- stage: ${{ parameters.envrionment }}
+  
+  jobs:
+  - deployment: terraformBackend
+    displayName: Create Backend
+    
+    environment: ${{ parameters.envrionment }}
+    workspace:
+      clean: all
+      
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: proxy-configure.yml
+
+          - task: AzureCLI@2
+            displayName: 'Powershell Bootstrap'
+            inputs:
+              azureSubscription: ${{ parameters.azureServiceConnection }}
+              scriptType: ps
+              scriptLocation: inlineScript
+              inlineScript: |
+                $ErrorActionPreference = "Stop"
+                
+                Get-InstalledModule -Name Az.Accounts -MinimumVersion 1.7.5 -MaximumVersion 2.2.7
+                Get-InstalledModule -Name Az.Resources -MinimumVersion 1.13.0 -MaximumVersion 3.1.0
+                Get-InstalledModule -Name Az.Storage -MinimumVersion 1.14.0 -MaximumVersion 3.1.0
+                
+                # This tasks sets these values from the service connection
+                $tenantId = $env:tenantId
+                $servicePrincipalId = $env:servicePrincipalId
+                $servicePrincipalKey = $env:servicePrincipalKey
+                
+                Write-Host "Connect to Azure"
+                $secret = ConvertTo-SecureString $servicePrincipalKey -AsPlainText -Force
+                $psCred = New-Object System.Management.Automation.PSCredential ($servicePrincipalId, $secret)
+                
+                Connect-AzAccount -Tenant $tenantId -ServicePrincipal -Credential $psCred
+                
+                $rg_name = "${{ parameters.resourceGroup }}"
+                $rg_location = "${{ parameters.location }}"
+                $rg_tags = "${{ parameters.tags }}"
+                $storage_account_name = "${{ parameters.storageAccount }}"
+                $container_name = "${{ parameters.container }}"
+                
+                Write-Host "Checking Resource Group... $rg_tags"
+                $rg = Get-AzResourceGroup -Name $rg_name -ErrorAction SilentlyContinue
+                if(!$rg) 
+                {
+                    $tags = ConvertFrom-StringData -StringData $rg_tags
+                    $rg = New-AzResourceGroup -Name $rg_name -Location $rg_location -Tag $tags
+                    Write-Host "Created new Resource Group $($rg.ResourceGroupName)"
+                }
+                
+                Write-Host "Checking Storage Account..."
+                $sa = Get-AzStorageAccount -Name $storage_account_name -ResourceGroupName $rg.ResourceGroupName -ErrorAction SilentlyContinue
+                if(!$sa)
+                {
+                    $sa = New-AzStorageAccount -ResourceGroupName $rg.ResourceGroupName -Name $storage_account_name -Location $rg_location -SkuName Standard_GRS -Kind StorageV2
+                    Write-Host "Created new Storage Account $($sa.StorageAccountName)"
+                }
+                
+                Write-Host "Checking Storage Container..."
+                $ct = Get-AzStorageContainer -Context $sa.Context -Name $container_name -ErrorAction SilentlyContinue
+                if(!$ct) 
+                {
+                    $ct = New-AzStorageContainer -Name $container_name -Context $sa.Context
+                    Write-Host "Created new Storage Container $($ct.Name)"
+                }
+                
+              addSpnToEnvironment: true
+              

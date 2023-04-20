@@ -1,0 +1,164 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Microsoft/Fazure-pipelines-task-lib/master/tasks.schema.json",
+    "id": "e84769ee-ef5e-4eb7-a13b-2ebb0152aae0",
+    "name": "DacpacDeploymentTasks",
+    "friendlyName": "SQL Server DacPac deployment tasks",
+    "description": "SQL Server database DACPAC deployment tasks",
+    "helpUrl": "https://tfs.westpac.co.nz/WestpacCollection/DevOpsTools/_git/DacPacDeployTasks",
+    "helpMarkDown": "[Learn more about this task](https://tfs.westpac.co.nz/WestpacCollection/DevOpsTools/_git/DacPacDeployTasks)",
+    "category": "Deploy",
+    "visibility": [
+        "Release"
+    ],
+    "runsOn": [
+        "Agent",
+        "DeploymentGroup"
+    ],
+    "author": "Westpac",
+    "version": {
+        "Major": 0,
+        "Minor": 19,
+        "Patch": 0
+    },
+    "demands": [],
+    "minimumAgentVersion": "1.102.0",
+    "groups": [],
+    "inputs": [
+        {
+            "name": "Action",
+            "type": "pickList",
+            "label": "Action",
+            "required": true,
+            "defaultValue": "DeployReport",
+            "options": {
+                "DeployReport": "DeployReport",
+                "Script": "Script",
+                "Publish": "Publish"
+            },
+            "helpMarkDown": "The task to perform: creates an XML report of the changes that would be made by a publish action, create a Transact-SQL update script, update a database schema to match the schema of a .dacpac file."
+        },
+        {
+            "name": "DacpacFile",
+            "type": "filePath",
+            "label": "DACPAC File",
+            "required": true,
+            "defaultValue": "",
+            "helpMarkDown": "Location of the DACPAC file on the agent or on a UNC path. The UNC path should be accessible to the agent's account. Environment variables are also supported, like $env:windir, $env:systemroot, $env:windir\\FabrikamFibre\\DB. Wildcards can be used. For example, `**/*.dacpac` for DACPAC file present in all sub folders."
+        },
+        {
+            "name": "PublishProfile",
+            "type": "filePath",
+            "label": "Publish Profile",
+            "required": false,
+            "defaultValue": "",
+            "helpMarkDown": "Publish profile provide fine-grained control over SQL Server database deployments. Specify the path to the Publish profile XML file on the target machine or on a UNC share that is accessible by the machine administrator's credentials."
+        },
+        {
+            "name": "BlockOnDataLoss",
+            "type": "boolean",
+            "label": "Block On Possible Data Loss",
+            "required": false,
+            "defaultValue": "true",
+            "visibleRule": "Action = Publish",
+            "helpMarkDown": "Specifies that the Publish operation will fail if the resulting schema changes could incur a loss of data."
+        },
+        {
+            "name": "ConnectionString",
+            "type": "multiLine",
+            "label": "Connection String",
+            "required": true,
+            "defaultValue": "",
+            "helpMarkDown": "Specify the SQL Server connection string like \"Server=localhost;Database=Example;Integrated Security=True\"."
+        },
+        {
+            "name": "AuthScheme",
+            "type": "pickList",
+            "label": "Authentication",
+            "required": true,
+            "defaultValue": "windowsAuthentication",
+            "options": {
+                "windowsAuthentication": "Windows Authentication",
+                "windowsAuthenticationRunAs": "Windows Authentication RunAs",
+                "sqlServerAuthentication": "SQL Server Authentication"
+            },
+            "helpMarkDown": "Select the authentication mode for connecting to the SQL Server. In Windows authentication mode, the account the agent is running as is used to the SQL Server - assuming the connection string is using Integrated Security. In SQL Server Authentication mode, the SQL login and Password have to be provided in the parameters below."
+        },
+        {
+            "name": "SqlUsername",
+            "type": "string",
+            "label": "SQL User name",
+            "required": true,
+            "defaultValue": "",
+            "visibleRule": "AuthScheme = sqlServerAuthentication",
+            "helpMarkDown": "Provide the SQL login to connect to the SQL Server. Sets the connections strings UserName parameter and removes Integrated Security parameter if set."
+        },
+        {
+            "name": "SqlPassword",
+            "type": "string",
+            "label": "SQL Password",
+            "required": true,
+            "defaultValue": "",
+            "visibleRule": "AuthScheme = sqlServerAuthentication",
+            "helpMarkDown": "Provide the Password of the SQL login."
+        },
+        {
+            "name": "RunAsUsername",
+            "type": "string",
+            "label": "RunAs User name",
+            "required": false,
+            "defaultValue": "",
+            "visibleRule": "AuthScheme = windowsAuthenticationRunAs",
+            "helpMarkDown": "Provide the Active Directory user to run the tasks as. Assumes the connection string is using Integrated Security."
+        },
+        {
+            "name": "RunAsPassword",
+            "type": "string",
+            "label": "RunAs Password",
+            "required": false,
+            "defaultValue": "",
+            "visibleRule": "AuthScheme = windowsAuthenticationRunAs",
+            "helpMarkDown": "Provide the Password of the Active Directory user."
+        },
+        {
+            "name": "OutputPath",
+            "type": "filePath",
+            "label": "Output Path",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "Specifies the file path where the output files are generated."
+        },
+        {
+            "name": "AdditionalArguments",
+            "type": "multiLine",
+            "label": "Additional Arguments",
+            "required": false,
+            "defaultValue": "",
+            "helpMarkDown": "Additional SqlPackage.exe arguments that will be applied when deploying the SQL Server database like, /p:IgnoreAnsiNulls=True /p:IgnoreComments=True. These arguments will override the settings in the Publish profile XML file (if provided)."
+        }
+    ],
+    "instanceNameFormat": "Deploy using : $(TaskType)",
+    "execution": {
+        "PowerShell3": {
+            "target": "Main.ps1",
+            "platforms": [
+                "windows"
+            ],
+            "workingDirectory": "$(currentDirectory)"
+        }
+    },
+    "messages": {
+        "SQLPowershellModuleisnotinstalledonyouragentmachine": "SQL Powershell Module is not installed on your agent machine. Please follow steps given below to execute this task",
+        "InstallPowershellToolsharedManagementObjectsdependency": "1. Install PowershellTools & SharedManagementObjects(dependency), from https://www.microsoft.com/en-us/download/details.aspx?id=52676 (2016)",
+        "RestartagentmachineafterinstallingtoolstoregisterModulepathupdates": "2. Restart agent machine after installing tools to register Module path updates",
+        "Nofileswerefoundtodeploywithsearchpattern0": "No files were found to deploy with search pattern {0}",
+        "Foundmorethanonefiletodeploywithsearchpattern0Therecanbeonlyone": "Found more than one file to deploy with search pattern {0}. There can be only one."
+    },
+    "outputVariables": [{
+        "name" : "DBChangesDetected",
+        "description" : "The DeployReport task found database changes."
+    },
+    {
+        "name" : "DBDataLossChangesDetected",
+        "description" : "The DeployReport task found database changes that may cause data loss."
+    }]
+}

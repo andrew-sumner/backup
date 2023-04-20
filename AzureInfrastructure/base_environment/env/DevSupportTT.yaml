@@ -1,0 +1,29 @@
+azure_tenant: test
+environment_type: Development
+squad_name: ICE
+
+dynamics365_url: https://devsupporttt.crm6.dynamics.com
+
+spn_owners: [
+  a806d99d-ab24-4564-861f-7343e3edbabf,  # Andrew Sumner
+  e2351405-9746-4768-be5e-3df41491ecf6,  # Eric Regnier
+]
+
+# Values to lookup from shared keyvault
+fico_datapower_id: intg
+docusign_datapower_id: intg
+securityops_datapower_id: intg
+datapower_id: syst
+
+sbus_sender_spn_name: ICE-DataPower-Test
+
+app_service_plan_sku:
+  tier: PremiumV2
+  size: P1v2
+  capacity: null
+  autoscale: true
+  autoscale_start_capacity: 1
+
+servicebus_sku:
+  sku: Premium
+  capacity: 1

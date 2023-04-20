@@ -1,0 +1,31 @@
+parameters:
+- name: configurationDirectory
+- name: workspace
+- name: azureServiceConnection
+- name: backendVariableGroup
+- name: proxyVariableGroup        # No longer required, kept for backwards compatibility
+  default: ''
+
+stages:
+- stage: ${{ parameters.workspace }}
+  
+  variables:
+    - group: ${{ parameters.backendVariableGroup }}
+    # - group: ${{ parameters.proxyVariableGroup }}
+
+  jobs:
+  - deployment: Deploy
+    
+    environment: ${{ parameters.workspace }}
+    workspace:
+      clean: all
+      
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: terraform-apply.yml
+            parameters:
+              backendServiceConnection: ${{ parameters.azureServiceConnection }}
+              configurationDirectory: ${{ parameters.configurationDirectory }}
+              workspace: ${{ parameters.workspace }}

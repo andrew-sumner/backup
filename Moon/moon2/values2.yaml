@@ -1,0 +1,419 @@
+## Uninstall
+# helm -n itcrowd-moon delete moon
+## Install
+# helm upgrade --install -n itcrowd-moon moon aerokube/moon2 -f values2.yaml
+# helm upgrade --install --skip-crds -n itcrowd-moon moon . -f values2.yaml
+## Install browser-ops
+# helm upgrade --install -n itcrowd-moon browser-ops aerokube/browser-ops -f values.yaml
+## Render k8s manifests
+# helm template --skip-crds -n itcrowd-moon moon . -f values2.yaml
+
+customIngress:
+  enabled: false
+
+## To be able to disable ingress completely
+ingress:
+  enabled: false
+
+## Required to be aligned with westpac environment
+clusterRole:
+  enabled: false
+RoleBinding:
+  adminGroup: CorpNZ-Application-K8S-ITCrowd-Admin
+
+## Moon service account annotations.
+serviceAccountAnnotations: {}
+## Moon service annotations.
+serviceAnnotations: {}
+## Moon service labels.
+serviceLabels: {}
+
+## Moon service to customize without ingress.
+service:
+  ## Service type eg NodePort, LoadBalancer.
+  type: NodePort
+  ## Load balanser IP address.
+  loadBalancerIP:
+  ## List of external IP addresses.
+  externalIPs: []
+
+## Moon deployment settings.
+deployment:
+  ## Total number of Moon pods. Default is 2.
+  replicas:
+  ## Moon pods graceful shutdown timeout. Default is 360 seconds.
+  terminationGracePeriodSeconds:
+
+  ## Moon container image repository. Default is quay.io/aerokube/moon.
+  moonRepo: docker.artifactory2.westpac.co.nz/aerokube/moon
+  ## Moon container image tag. Default equals to chart app version.
+  moonTag:
+  ## Moon container CPU limit. Default is 0.5.
+  moonCPULimit:
+  ## Moon container CPU request. Default is 0.2.
+  moonCPURequest:
+  ## Moon container memory limit. Default is 256Mi.
+  moonMemoryLimit:
+  ## Moon container memory request. Default is 256Mi.
+  moonMemoryRequest:
+
+  ## Moon callback url. In case of using Moon without ingress or with custom ingress as AWS alb.
+  moonCallbackURL:
+  ## Moon additional arguments. Use it in case you need to pass some parameters to moon binary
+  moonAdditionalArgs: []
+
+  ## Moon-conf image repository. Default is quay.io/aerokube/moon-conf.
+  moonConfRepo: docker.artifactory2.westpac.co.nz/aerokube/moon-conf
+  ## Moon-conf container image tag. Default equals to chart app version.
+  moonConfTag:
+  ## Moon-conf container CPU limit. Default is 0.25.
+  moonConfCPULimit:
+  ## Moon-conf container CPU request. Default is 0.05.
+  moonConfCPURequest:
+  ## Moon-conf container memory limit. Default is 128Mi. Request and limit are recommended to be equal.
+  moonConfMemoryLimit:
+  ## Moon-conf container memory request. Default is 128Mi.
+  moonConfMemoryRequest:
+
+  ## Moon-basic-auth container image repository. Default is quay.io/aerokube/moon-basic-auth.
+  moonBasicAuthRepo:
+  ## Moon-basic-auth container image tag. Default equals to chart app version.
+  moonBasicAuthTag:
+  ## Moon-basic-auth container CPU limit. Default is 0.5.
+  moonBasicAuthCPULimit:
+  ## Moon-basic-auth container CPU request. Default is 0.2.
+  moonBasicAuthCPURequest:
+  ## Moon-basic-auth container memory limit. Default is 256Mi.
+  ## We recommend setting the same value for memory request and limit.
+  moonBasicAuthMemoryLimit:
+  ## Moon-basic-auth container memory request. Default is 256Mi.
+  moonBasicAuthMemoryRequest:
+
+
+  moonUIRepo: docker.artifactory2.westpac.co.nz/aerokube/moon-ui
+  moonUITag:
+  moonUICPULimit:
+  moonUICPURequest:
+  moonUIMemoryLimit:
+  moonUIMemoryRequest:
+
+  ## If specified, the pod's security policies.
+  ## ref: https://kubernetes.io/docs/concepts/policy/pod-security-policy/
+  securityContext:
+    runAsUser: 1000
+
+  ## Node Selector for Moon pods
+  nodeSelector: {}
+    # moon-node: "true"
+    # moon-node: "false"
+  #  kubernetes.io/os: linux
+
+  ## Assign custom affinity rules to the instance
+  ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+  ##
+  # affinity: {}
+  #  nodeAffinity:
+  #    requiredDuringSchedulingIgnoredDuringExecution:
+  #      nodeSelectorTerms:
+  #      - matchExpressions:
+  #        - key: kubernetes.io/e2e-az-name
+  #          operator: In
+  #          values:
+  #          - e2e-az1
+  #          - e2e-az2
+  
+  # affinity:
+  #   nodeAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       nodeSelectorTerms:
+  #         - matchExpressions:
+  #             - key: moon-node
+  #               operator: Exists
+
+  tolerations:
+    - effect: NoSchedule
+      key: MoonPods
+      operator: Exists
+
+ConfigMap:
+  BrowserEnv:
+    http_proxy: http://swg.inet.westpac.co.nz:8080
+    https_proxy: http://swg.inet.westpac.co.nz:8080
+    no_proxy: "westpac.co.nz, westpactrust.co.nz"
+
+configs:
+  default:
+    serviceAccountName: default
+    sessionTimeout: 5m
+    user:
+      id: 1000
+      name: user
+    group:
+      id: 1000
+      name: user
+    storage:
+      endpoint: "http://minio.itcrowd-minio:9000"
+      bucket: "moon"
+      filename: ""
+      pattern: "$sessionId"
+      accessKey: "minio"
+      secretKey: "changeme"
+      # version: "S3v2"
+    containers:
+      browser:
+        resources:
+          limits:
+            cpu: "1"
+            memory: 3Gi
+          requests:
+            cpu: 500m
+            memory: 3Gi
+      ca-certs:
+        repository: docker.artifactory2.westpac.co.nz/aerokube/ca-certs
+        resources:
+          limits:
+            cpu: 200m
+            memory: 32Mi
+          requests:
+            cpu: 100m
+            memory: 32Mi
+      defender:
+        repository: docker.artifactory2.westpac.co.nz/aerokube/defender
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+      video-recorder:
+        repository: docker.artifactory2.westpac.co.nz/aerokube/video-recorder
+        resources:
+          limits:
+            cpu: "1"
+            memory: 2Gi
+          requests:
+            cpu: 250m
+            memory: 2Gi
+      vnc-server:
+        version: "latest"
+        repository: docker.artifactory2.westpac.co.nz/aerokube/vnc-server
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+      x-server:
+        repository: docker.artifactory2.westpac.co.nz/aerokube/xvfb-server
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+    additionalTrustedCAs: |
+      -----BEGIN CERTIFICATE-----
+      MIIGfDCCBGSgAwIBAgIQL1Rk9IYg4ZtBGnz5RrGzXzANBgkqhkiG9w0BAQsFADCB
+      hzELMAkGA1UEBhMCTloxETAPBgNVBAcTCEF1Y2tsYW5kMSQwIgYDVQQKExtXZXN0
+      cGFjIE5ldyBaZWFsYW5kIExpbWl0ZWQxIzAhBgNVBAsTGkluZm9ybWF0aW9uIFNl
+      Y3VyaXR5IEdyb3VwMRowGAYDVQQDExFXTlpMIFNIQTIgUm9vdCBDQTAeFw0xODA1
+      MDEwMDA4MjFaFw0zODA1MDEwMDEwMjJaMIGHMQswCQYDVQQGEwJOWjERMA8GA1UE
+      BxMIQXVja2xhbmQxJDAiBgNVBAoTG1dlc3RwYWMgTmV3IFplYWxhbmQgTGltaXRl
+      ZDEjMCEGA1UECxMaSW5mb3JtYXRpb24gU2VjdXJpdHkgR3JvdXAxGjAYBgNVBAMT
+      EVdOWkwgU0hBMiBSb290IENBMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKC
+      AgEAp6z6G/yOY0tNimJBIAvI+gety9gsnzX22fAuQL6tJdhszir7nDnvw6x/rJ0O
+      c7ETsK32TWk3Yrj1zOMxcsSKNEQKSQKWGuHrZqSjhPxKdekOg4BGz42Ocby8Jq66
+      am+YqIC+Vy0K5EG3QvdwKx2EDaY8adDcuQlktXbRySEmAd7D4lWPPS2chqvB6k7E
+      iZAfly2UPsprpQLSdccFxVbjaDtZQK5NAImgNVroX5dLzfh/Y5gla9T85qn98OPY
+      kXphX5xUFQHzHjl2r7M8cskKwiVjryY6haAhaMQPyWK9Y8AEBL7l75j9xE1a+Uf7
+      pNrlW3dau/u+cITuJ1n1FjgLs4jDlw8Wz2DxUD10+neTvVOeUdOPFs4dCAyHJQnc
+      aYKm7qvQ7TKuENs3xJR+5Un6e8H3Np4VtWirvem5sLLBabHxKet5JLyFVfMoBk7b
+      iFqDT/D+GJ/Kef9VmUIx52kqypeV9aSfjzp/EFhw58qILhRk6g1K081iNh9fOZbI
+      1OtBNDuVTZsaqauNGxVQhwDcU6GHSe1lZqxjwd76JA+cF/hWu9ys5QOIiystN3Ex
+      KPoQSDn4980g3vRMFUPzvC1GkWbzKRc80wt+1nHb//0UmTonn4VuXKZwIr3L+0Qi
+      wCLLkkdNia2hxxGPMkqOU8N04+1CWfZiaXycsEFhXBwf63MCAwEAAaOB4TCB3jAL
+      BgNVHQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUb5L+uPve793V
+      p7RUBhBlVVN/zC0wEAYJKwYBBAGCNxUBBAMCAQAwgYwGA1UdIASBhDCBgTB/Bgcr
+      BgEEAZwTMHQwOgYIKwYBBQUHAgIwLh4sAEwAZQBnAGEAbAAgAFAAbwBsAGkAYwB5
+      ACAAUwB0AGEAdABlAG0AZQBuAHQwNgYIKwYBBQUHAgEWKmh0dHA6Ly93bnpsLXBr
+      aS13ZXN0cGFjLmNvLm56L3BraS9jcHMucGRmADANBgkqhkiG9w0BAQsFAAOCAgEA
+      XsVZN2mDw6CseOyeF7rzFZPpX4zDkVb7h5uzn4xcFXEz4BzUn3jASypwrPLE0l7I
+      MZ9QfNOmW8OsQrZwdOJD++h5xiHyy3/f0lC7YhpdWsqvsOomisRj2F+tzEK56OOj
+      uQyXG9E7GZGTHpig5yG+rhpDTiUW9N3isA38NSlltULZHR7m5CKDt4gsk2rzKD/1
+      VOqcpaIthb76YIG+7lrLU2lbwa6etZsqElml5Cgx0/MHPARHrEh1yuPBMF7fi1d5
+      +rEjnAKQwsGAryJet7YIiV9JshN36cNlUr4g4ye/iQOnrV6zYkB2FyKFuwKqM3bg
+      lh0NhO/SNJYDoj6/YJwsF4yugW3IxtNkXWWardd6UYR01CO8V6M2xUoFW/rS32xu
+      T6d6JShjMqcaSPKXynGy5NmPAR1XSj9h54xJig/ehiQJEDvFl0fIm94+1Wo66Kwj
+      rDKd0nDo3Yu8N0lX1o5aiywmQoVg+eQQm48fcLG3Qgvv11Bka9h7xOTIF4DHbUx4
+      s8agv1CWuSwp/0zoWR+XV6QR6zSX3CHbiNse/s1X4sdUGjctWD9+nBVFsdwKHV3u
+      +PKPIKy2/h8Rw+Tbhk1tailjvSSGoYZG55cOqQgmSEFECUvRpPtOevXIoSUUgjij
+      ElmcJSgLtkIKXLNDkaa3TdwS0fHB2lUgEBtMaHh3Yy8=
+      -----END CERTIFICATE-----
+      -----BEGIN CERTIFICATE-----
+      MIIGCzCCA/OgAwIBAgITFgAAAAOY1jaeqzezyQAAAAAAAzANBgkqhkiG9w0BAQsF
+      ADCBhzELMAkGA1UEBhMCTloxETAPBgNVBAcTCEF1Y2tsYW5kMSQwIgYDVQQKExtX
+      ZXN0cGFjIE5ldyBaZWFsYW5kIExpbWl0ZWQxIzAhBgNVBAsTGkluZm9ybWF0aW9u
+      IFNlY3VyaXR5IEdyb3VwMRowGAYDVQQDExFXTlpMIFNIQTIgUm9vdCBDQTAeFw0x
+      ODA1MDIwMTEwMzNaFw0yODA1MDIwMTIwMzNaMIGGMQswCQYDVQQGEwJOWjERMA8G
+      A1UEBxMIQXVja2xhbmQxJDAiBgNVBAoTG1dlc3RwYWMgTmV3IFplYWxhbmQgTGlt
+      aXRlZDEjMCEGA1UECxMaSW5mb3JtYXRpb24gU2VjdXJpdHkgR3JvdXAxGTAXBgNV
+      BAMTEFdOWkwgU0hBMiBTU0wgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+      AoIBAQDRJ2daPxgVxa83U03VJvchDJixYc8hV4dhuCRAYpdCxUALOTwmGH6fgCal
+      sRWb2GAtUGMYJwLUSLHzsYT8w6PQB7vjXh8spnS+bEDOjzKYxInMccJ6H7IBwre4
+      GCMBw+of6wH6s+eDNKUefi2PoTv42obhteszpjYNyHMPIRpeKk+iIox9d9Sl0ppE
+      bfgyt04s0+Zepx/zKDWXRgNzDXfjhBh+RmW3xiisK1z9Tapi/yH8qPXxlxzgMS74
+      dZ5qAi+oBR23ilZ8wARi+05sM1d4a9+OZ/grPSuPOZWsrxDprgpCoubvUcz0SUNU
+      b2dq99mBQhaLVBR2lNO2es4J4LEdAgMBAAGjggFtMIIBaTAQBgkrBgEEAYI3FQEE
+      AwIBADAdBgNVHQ4EFgQUFgBtlMBlVOJNRewf4bXUAsWXuZUwgYwGA1UdIASBhDCB
+      gTB/BgcrBgEEAZwTMHQwOgYIKwYBBQUHAgIwLh4sAEwAZQBnAGEAbAAgAFAAbwBs
+      AGkAYwB5ACAAUwB0AGEAdABlAG0AZQBuAHQwNgYIKwYBBQUHAgEWKmh0dHA6Ly93
+      bnpsLXBraS53ZXN0cGFjLmNvLm56L3BraS9jcHMucGRmADAZBgkrBgEEAYI3FAIE
+      DB4KAFMAdQBiAEMAQTALBgNVHQ8EBAMCAYYwEgYDVR0TAQH/BAgwBgEB/wIBATAf
+      BgNVHSMEGDAWgBRvkv64+97v3dWntFQGEGVVU3/MLTBKBgNVHR8EQzBBMD+gPaA7
+      hjlodHRwOi8vd256bC1wa2ktY3JsMS53ZXN0cGFjLmNvLm56L3BraS9XTlpMU0hB
+      MlJvb3RDQS5jcmwwDQYJKoZIhvcNAQELBQADggIBADTzBxu4RNtyTzR2/FGZeXe1
+      uJIYfeaRJMcSXrLJKr5AU8WNwKcUE3LTRi1j0zi5ZmFrx8l/rtjk474zRE+nlXvL
+      9pJEctmn0x9qw2VzTXwI/+GJC+GBPuWCUTA5uBQpC857sH1ZX8PcS5bsfimdPZ+I
+      60fLN2wPxRUakljUlp7i3ENLjjl3zlyJVfhtaMdMw2PK0Br3zu+Se5TJnBgy1YRb
+      l4UNNZ2X+cVf+czn+Xd1sg1k4EXWGYBkLxryOndhZLqBuosvb/4WXYKIg4l+TIgL
+      VT7F+GMnKqolTnyo2gJTDVqL+gjIeALdcuiphwbspKGEGsh8YmYUAF2ymifSis9X
+      CRhZQi6MfzhdImmFJAegXGYE6EzTouDuzNraV/bguR1lahbL2voPJQqvpRM/OM7a
+      zEA36toKEw1YKyWpUAJsO608ssAO3qHL2pNZE944a2Q+59Txr4bgqX1/lorC2EAq
+      yGDkZyh5lpC90EkCtohKyrB7SVdVtn0p4s2ey64b8flBPN/k+eMvV4HhCA/otYAY
+      e6gOjpqgkSw6bZqKpkNRnrtFoKL/qWWv18hyRNISZS5Z+q1rF6Rj++6nq9O32jZY
+      5WJ3vJ5t70ssjdnB09x6pvs7P43/ghc3TG5V3JdOnwMhRVRPwGPvD01QMFe9FwOg
+      VKjt6ltJkSc3xuvCTQkC
+      -----END CERTIFICATE-----
+
+browsers:
+  default:
+    ## Node Selector for browser pods
+    nodeSelector:                         
+      moon-node: "true"
+    tolerations:
+      - effect: NoSchedule
+        key: MoonPods
+        operator: Exists
+    selenium:
+      # env:
+      #   - name: http_proxy
+      #     value: http://swg.inet.westpac.co.nz:8080
+      #   - name: https_proxy
+      #     value: http://swg.inet.westpac.co.nz:8080
+      #   - name: no_proxy
+      #     value: "westpac.co.nz, westpactrust.co.nz"
+      MicrosoftEdge:
+        repository: docker.artifactory2.westpac.co.nz/browser/microsoft-edge-stable
+        default: latest
+        env:
+          - name: http_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: http_proxy
+          - name: https_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: https_proxy
+          - name: no_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: no_proxy
+      chrome:
+        repository: docker.artifactory2.westpac.co.nz/browser/google-chrome-stable
+        default: latest
+        # capabilities:
+        #   add:
+        #     - "{\"goog:chromeOptions\":{\"args\":[\"no-sandbox\"]}}"
+        #     - "{\"alwaysMatch\":{\"goog:chromeOptions\":{\"excludeSwitches\":[\"enable-automation\"]},\"goog:chromeOptions\":{\"args\":[\"no-sandbox\"]}}}"
+        env:
+          - name: http_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: http_proxy
+          - name: https_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: https_proxy
+          - name: no_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: no_proxy
+      firefox:
+        repository: docker.artifactory2.westpac.co.nz/browser/firefox-mozilla-build
+        default: latest
+        env:
+          - name: http_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: http_proxy
+          - name: https_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: https_proxy
+          - name: no_proxy
+            valueFrom:
+              configMapKeyRef:
+                name: browser-env
+                key: no_proxy
+      opera:
+        repository: docker.artifactory2.westpac.co.nz/browser/opera-stable
+        default: latest
+      safari:
+        repository: docker.artifactory2.westpac.co.nz/browser/safari
+        default: latest
+    cypress:
+      electron:
+        repository: docker.artifactory2.westpac.co.nz/browsers/cypress-electron
+      chromium:
+        repository: docker.artifactory2.westpac.co.nz/browsers/cypress-chromium
+      chrome:
+        repository: docker.artifactory2.westpac.co.nz/browsers/cypress-chrome
+      firefox:
+        repository: docker.artifactory2.westpac.co.nz/browsers/cypress-firefox
+      edge:
+        repository: docker.artifactory2.westpac.co.nz/browsers/cypress-edge
+    playwright:
+      chrome:
+        repository: docker.artifactory2.westpac.co.nz/browser/playwright-chrome
+      chromium:
+        repository: docker.artifactory2.westpac.co.nz/browser/playwright-chromium
+      firefox:
+        repository: docker.artifactory2.westpac.co.nz/browser/playwright-firefox
+      webkit:
+        repository: docker.artifactory2.westpac.co.nz/browser/playwright-webkit
+    devtools:
+      chrome:
+        repository: docker.artifactory2.westpac.co.nz/browser/devtools-google-chrome-stable
+
+quota:
+  ##
+  ## Default quota. Detailed description of the fields can be found
+  ## in documentation: https://aerokube.com/moon/latest/#quotas. Set it
+  ## to null when having multiple quota objects.
+  ##
+  moon:
+    namespace: itcrowd-moon
+
+##
+## License key. When empty default free license key is automatically used.
+##
+license:
+
+## Disable managing cluster scope Licence resource
+licenseInternal: false
+
+##
+## License key secret name. License data will loaded from secret, overrides license field.
+##
+licenseSecretName:

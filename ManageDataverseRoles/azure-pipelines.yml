@@ -1,0 +1,61 @@
+trigger:
+  batch: true # Cannot run terraform commands in parallel? Test this
+  branches:    
+    include: 
+    - master
+
+resources:
+  repositories:
+  - repository: templates
+    name: DevOpsTools/PipelineTemplates
+    type: git
+    ref: main
+    # ref: refs/tags/v1.0 # pin to tag
+    # ref: tf_lint # pin to branch 
+  
+pool:
+  name: Default
+
+stages:
+
+- template: stage-azure-function-build.yml@templates
+  parameters:
+    # Terraform
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    proxyVariableGroup: Proxy
+    configurationDirectories: 
+    - Terraform
+    # Function App
+    buildSolution: ManageDataverseRoles.sln
+    publishProjects: |
+      **/ManageDataverseRoles.csproj
+    sonarqubeServiceConnection: WestpacSonarQube
+    sonarqubeProjectKey: ManageDataverseRoles
+    
+- template: stage-azure-function-deploy.yml@templates
+  parameters:
+    workspace: TestProdTT
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    proxyVariableGroup: Proxy
+    configurationDirectory: $(Pipeline.Workspace)/terraform
+    functionPackage: $(Pipeline.Workspace)/drop/ManageDataverseRoles.zip
+    
+- template: stage-azure-function-deploy.yml@templates
+  parameters:
+    workspace: PreProd
+    azureServiceConnection: Azure Prod Tenant
+    backendVariableGroup: Terraform Prod Backend
+    proxyVariableGroup: Proxy
+    configurationDirectory: $(Pipeline.Workspace)/terraform
+    functionPackage: $(Pipeline.Workspace)/drop/ManageDataverseRoles.zip
+
+- template: stage-azure-function-deploy.yml@templates
+  parameters:
+    workspace: Prod
+    azureServiceConnection: Azure Prod Tenant
+    backendVariableGroup: Terraform Prod Backend
+    proxyVariableGroup: Proxy
+    configurationDirectory: $(Pipeline.Workspace)/terraform
+    functionPackage: $(Pipeline.Workspace)/drop/ManageDataverseRoles.zip

@@ -1,0 +1,133 @@
+# Purpose
+# -------
+# Perform terraform init / workspace select / plan / apply steps. For use as part of a deployment pipeline.
+# Assumes that the using workspaces and that the workspace has already been created.
+#
+# Requires that the following variables are set in the pipeline:
+# * TerraformVersion
+# * BackendResourceGroup
+# * BackendStorageAccount
+# * BackendStorageAccountContainer
+#
+# Unfortunatley service connections are treated differently in yaml pipelines and have been unable to use a service connection declared in a variable group.
+
+parameters:
+- name: configurationDirectory
+- name: workspace
+- name: backendServiceConnection
+- name: performApply
+  type: boolean
+  default: true
+
+steps:          
+- template: proxy-configure.yml
+
+- task: TerraformInstaller@0
+  inputs:
+    terraformVersion: $(TerraformVersion)
+
+- task: PowerShell@2
+  displayName: Get terraform back end key
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "Searching $((Get-Location).Path)\main.tf for backend configuration"
+      [string]$line = Select-String -Path "main.tf" -Pattern '^\s*key.*=.*$' -List
+
+      if ($line) {
+          $var = $line.Split('=',2).Trim()
+          $value = $var[1]
+          $value = $value.Replace('"', '')
+      }
+
+      Write-Host "Found back end key: '${value}'"
+      Write-Host ("##vso[task.setvariable variable=BackendKey]${value}")
+    workingDirectory: '${{ parameters.configurationDirectory }}'
+
+- task: TerraformTaskV2@2
+  displayName: terraform init
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '${{ parameters.configurationDirectory }}'
+    commandOptions: '-no-color -reconfigure'
+    backendServiceArm: ${{ parameters.backendServiceConnection }}
+    backendAzureRmResourceGroupName: $(BackendResourceGroup)
+    backendAzureRmStorageAccountName: $(BackendStorageAccount)
+    backendAzureRmContainerName: $(BackendStorageAccountContainer)
+    backendAzureRmKey: $(BackendKey)
+
+# - task: PowerShell@2
+#   displayName: Select Workspace ${{ parameters.workspace }}
+#   inputs:
+#     targetType: 'inline'
+#     script: |
+#       if (!(Test-Path "env\${{ parameters.workspace }}.yaml")) {
+#         throw "Environment settings file env\${{ parameters.workspace }}.yaml was not found"
+#       }
+      
+#       Write-Host "Selecting workspace '${{ parameters.workspace }}'"
+#       $output = (terraform workspace select ${{ parameters.workspace }} 2>&1) | Out-String
+      
+#       if ($LASTEXITCODE -ne 0) {
+#         if ($output.Contains("doesn't exist")) {
+#           Write-Host "Creating workspace '${{ parameters.workspace }}'"
+#           terraform workspace new ${{ parameters.workspace }}
+#         } else {
+#           Write-Error $output
+#         }
+#       }
+#     workingDirectory: '${{ parameters.configurationDirectory }}'
+
+- task: TerraformTaskV2@2
+  displayName: terraform plan
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '${{ parameters.configurationDirectory }}'
+    commandOptions: '-out=tfplan -compact-warnings -no-color'
+    environmentServiceNameAzureRM: '${{ parameters.backendServiceConnection }}' #'$(AzureSubscription)'
+  env:
+    # Force terraform to use this workspace, NOTE: workspace needs to exist which is a little problematic in prod
+    TF_WORKSPACE: ${{ parameters.workspace }}
+
+- task: TerraformTaskV2@2
+  displayName: terraform apply
+  condition: and(succeeded(), eq('${{ parameters.performApply }}', true))
+  inputs:
+    provider: 'azurerm'
+    command: 'apply'
+    workingDirectory: '${{ parameters.configurationDirectory }}'
+    commandOptions: '-auto-approve -compact-warnings -no-color tfplan'
+    environmentServiceNameAzureRM: '${{ parameters.backendServiceConnection }}' #'$(AzureSubscription)'
+  env:
+    # Force terraform to use this workspace, NOTE: workspace needs to exist which is a little problematic in prod
+    TF_WORKSPACE: ${{ parameters.workspace }}
+
+- task: PowerShell@2
+  displayName: Load terraform output variables
+  condition: and(succeeded(), eq('${{ parameters.performApply }}', true))
+  inputs:
+    targetType: 'inline'
+    script: |
+      $value = gci env: | where name -Match 'JSONOUTPUTVARIABLESPATH$' | select name,value -First 1
+      $jsonOutputVariablesPath = $null
+
+      if ($value) {
+        $jsonOutputVariablesPath = $value.Value
+      } else {
+        Write-Host "Environment variable <TASK NAME>_JSONOUTPUTVARIABLESPATH does not exist"
+      }
+
+      if ($jsonOutputVariablesPath) {
+        Write-Host "Reading $jsonOutputVariablesPath"
+        $json = Get-Content $jsonOutputVariablesPath | Out-String | ConvertFrom-Json
+        $values = $json.psobject.properties | select Name,Value
+
+        foreach ($i in $values) {
+          $name = $i.Name
+          $value = $i.Value.value
+          Write-Host "Loading $name = $value"
+          Write-Host "##vso[task.setvariable variable=$name]$value"
+        }
+      }

@@ -1,0 +1,48 @@
+parameters:
+- name: azureServiceConnection
+- name: backendVariableGroup
+- name: proxyVariableGroup        # No longer required, kept for backwards compatibility
+  default: ''
+- name: configurationDirectory
+- name: templateDirectory
+- name: nugetConfigPath
+  type: string
+  default: 'nuget.config'
+
+stages:
+  - stage: Build
+
+    variables:
+    - group: ${{ parameters.backendVariableGroup }}
+    # - group: ${{ parameters.proxyVariableGroup }}
+
+    jobs:
+    - job: buildTerraform
+      displayName: Build Terraform
+
+      steps:
+      - checkout: self
+        clean: true
+        persistCredentials: true
+
+      # Unfortunately it is impossible to dynamically generate a list of folders and iterate over that
+      - template: terraform-build.yml
+        parameters:
+          backendServiceConnection: ${{ parameters.azureServiceConnection }}
+          configurationDirectory: ${{ parameters.configurationDirectory }}
+            
+      - task: CopyFiles@2
+        displayName: Copy Terraform
+        inputs:
+          SourceFolder: .
+          Contents: |
+            ${{ parameters.configurationDirectory }}/**
+            ${{ parameters.templateDirectory }}/**
+          TargetFolder: '$(build.artifactstagingdirectory)'
+                
+      - task: PublishBuildArtifacts@1
+        displayName: Publish terraform artifact
+        inputs:
+          PathtoPublish: '$(build.artifactstagingdirectory)'
+          ArtifactName: drop
+          publishLocation: Container

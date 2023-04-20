@@ -1,0 +1,4 @@
+azure_tenant: test
+
+RemoveUsersFromTeamRole: False
+RemoveUsersFromSystemAdminRole: False

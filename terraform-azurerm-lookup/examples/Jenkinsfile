@@ -1,0 +1,5 @@
+@Library('cp_jenkins_shared_library')_
+def build_tests = true
+def customLint= false
+def judgeBranch="azurermV3"
+judgeDredd build_tests, customLint, judgeBranch

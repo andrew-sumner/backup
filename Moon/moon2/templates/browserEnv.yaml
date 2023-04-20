@@ -1,0 +1,10 @@
+{{- if .Values.ConfigMap.BrowserEnv }}
+{{- $BrowserEnv := .Values.ConfigMap.BrowserEnv }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: browser-env
+  namespace: {{ .Release.Namespace }}
+data: {{- $BrowserEnv | toYaml | nindent 2 }}
+{{- end }}

@@ -1,0 +1,53 @@
+parameters:
+- name: artifactName
+  type: string
+- name: dacpacFile
+  type: string
+- name: publishProfile
+  type: string
+- name: connectionString
+  type: string
+- name: additionalArguments
+  type: string
+  default: ''
+- name: runAsUsername
+  type: string
+- name: runAsPassword
+  type: string
+
+steps:
+- task: DownloadBuildArtifacts@0
+  inputs:
+    buildType: 'current'
+    downloadType: 'single'
+    artifactName: '${{ parameters.artifactName }}'
+    downloadPath: '$(Pipeline.Workspace)' #/${{ parameters.artifactName }}'
+
+- task: DacpacDeploymentTasks@0
+  name: dacpacDeployReport  # this name can be used to reference output variables of the task
+  displayName: 'DacPac Deploy Report'
+  inputs:
+    Action: 'DeployReport'
+    DacpacFile: '$(Pipeline.Workspace)/${{ parameters.artifactName }}/${{ parameters.dacpacFile }}'
+    PublishProfile: '$(Pipeline.Workspace)/${{ parameters.artifactName }}/${{ parameters.publishProfile }}'
+    ConnectionString: '${{ parameters.connectionString }}'
+    AuthScheme: 'windowsAuthenticationRunAs'
+    RunAsUsername: "${{ parameters.runAsUsername }}"
+    RunAsPassword: "${{ parameters.runAsPassword }}"
+    OutputPath: '$(System.DefaultWorkingDirectory)/deployreport.xml'
+    AdditionalArguments: '${{ parameters.additionalArguments }}'
+
+- task: DacpacDeploymentTasks@0
+  displayName: 'DacPac Change Script'
+  inputs:
+    Action: 'Script'
+    DacpacFile: "$(Pipeline.Workspace)/${{ parameters.artifactName }}/${{ parameters.dacpacFile }}"
+    PublishProfile: "$(Pipeline.Workspace)/${{ parameters.artifactName }}/${{ parameters.publishProfile }}"
+    ConnectionString: "${{ parameters.connectionString }}"
+    AuthScheme: 'windowsAuthenticationRunAs'
+    RunAsUsername: "${{ parameters.runAsUsername }}"
+    RunAsPassword: "${{ parameters.runAsPassword }}"
+    OutputPath: "$(System.DefaultWorkingDirectory)/deployreport.sql"
+    AdditionalArguments: "${{ parameters.additionalArguments }}"
+  # Skip if no database changes detected
+  condition: and(succeeded(), eq(variables['dacpacDeployReport.DBChangesDetected'], true))

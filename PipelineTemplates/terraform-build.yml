@@ -1,0 +1,105 @@
+# Purpose
+# -------
+# Designed to be used in build stage, Pulls down modules so that these can be published as part of the build artifact so that the release pipeline
+# is not impacted by changes in the modules that might be committed after the build stage
+#
+# Requires that the following variables are set in the pipeline:
+# * TerraformVersion
+# * BackendResourceGroup
+# * BackendStorageAccount
+# * BackendStorageAccountContainer
+#
+# Unfortunatley service connections are treated differently in yaml pipelines and have been unable to use a service connection declared in a variable group.
+
+parameters:
+- name: configurationDirectory
+- name: backendServiceConnection
+
+steps:
+
+# Authorise pipeline to access any Azure Devops repo
+- task: PowerShell@2
+  displayName: Authorise repository
+  inputs:
+    targetType: 'inline'
+    script: |
+      git config --global --unset-all http.extraheader
+      git config --global http.extraheader "AUTHORIZATION: bearer $(System.AccessToken)"
+  env:
+    # Force --global .gitconfig to be in the working directory to keep git config changes isolated
+    HOME: "$(System.DefaultWorkingDirectory)"
+
+# This should work, see https://stackoverflow.com/a/65772129/2913800
+# - task: PowerShell@2
+#   displayName: Grant terraform access to AzureDevops repos
+#   inputs:
+#     targetType: 'inline'
+#     script: |
+#       # used in Azure DevOps to allow terrform to auth with Azure DevOps GIT repos
+#       write-host "root is $PSScriptRoot"
+#       $tfmodules = Get-ChildItem  -Recurse -Filter "*.tf"
+#       foreach ($tfmodule in $tfmodules) {
+#         write-host "found $tfmodule.FullName"
+#         $content = [System.IO.File]::ReadAllText($tfmodule.FullName).Replace("git::https://tfs.westpac.co.nz","git::https://$(System.AccessToken)@tfs.westpac.co.nz")
+#         [System.IO.File]::WriteAllText($tfmodule.FullName, $content)
+#       }
+#     workingDirectory: '${{ parameters.configurationDirectory }}'
+
+    
+- template: proxy-configure.yml
+
+# - template: proxy-unconfigure.yml
+
+- task: TerraformInstaller@0
+  inputs:
+    terraformVersion: $(TerraformVersion)
+
+- task: PowerShell@2
+  displayName: Get terraform back end key
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "Searching $((Get-Location).Path)\main.tf for backend configuration"
+      [string]$line = Select-String -Path "main.tf" -Pattern '^\s*key.*=.*$' -List
+
+      if ($line) {
+          $var = $line.Split('=',2).Trim()
+          $value = $var[1]
+          $value = $value.Replace('"', '')
+      }
+
+      Write-Host "Found back end key: '${value}'"
+      Write-Host ("##vso[task.setvariable variable=BackendKey]${value}")
+    workingDirectory: '${{ parameters.configurationDirectory }}'
+
+- task: TerraformTaskV2@2
+  displayName: terraform init
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '${{ parameters.configurationDirectory }}'
+    commandOptions: '-no-color'
+    backendServiceArm: ${{ parameters.backendServiceConnection }}
+    backendAzureRmResourceGroupName: $(BackendResourceGroup)
+    backendAzureRmStorageAccountName: $(BackendStorageAccount)
+    backendAzureRmContainerName: $(BackendStorageAccountContainer)
+    backendAzureRmKey: $(BackendKey)
+  env:
+    # Force lookup of --global .gitconfig to the working directory
+    HOME: "$(System.DefaultWorkingDirectory)"
+
+- task: PowerShell@2
+  displayName: Delete redundant files from .terraform folder
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "Working Folder: $((Get-Location).Path)"
+      Get-ChildItem . -Include .git -Recurse -Attributes Directory+Hidden | Remove-Item -Force -Recurse -Verbose
+      Get-ChildItem . -Include .git -Recurse -Attributes Directory | Remove-Item -Force -Recurse -Verbose
+      Get-ChildItem . -Include examples -Recurse -Attributes Directory | Remove-Item -Force -Recurse -Verbose
+      # providers can get quite large, not a good idea to add them to build artifact
+      # It can also contain symlinks so "Remove-Item providers -Force -Recurse -Verbose" doesn't work
+      cmd /c "rmdir providers /s /q"
+      # prevent issues with init for release
+      Remove-Item terraform.tfstate -Force -Verbose
+    workingDirectory: '${{ parameters.configurationDirectory }}\.terraform'

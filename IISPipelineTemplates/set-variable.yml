@@ -1,0 +1,15 @@
+# Set an Azure DevOps pipeline variable
+parameters:
+- name: value
+  type: string
+- name: variableName
+  type: string
+
+steps:
+- task: PowerShell@2
+  displayName: Set Variable ${{ parameters.variableName }}
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host ("##vso[task.setvariable variable=${{ parameters.variableName }}]${{ parameters.value }}")
+  enabled: true

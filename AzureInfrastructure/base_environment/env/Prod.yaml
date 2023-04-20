@@ -1,0 +1,24 @@
+azure_tenant: prod
+environment_type: Production
+squad_name: ICE
+
+dynamics365_url: https://wnzl.crm6.dynamics.com
+
+# Values to lookup from shared keyvault
+fico_datapower_id: prod
+docusign_datapower_id: prod
+securityops_datapower_id: prod
+datapower_id: prod
+
+sbus_sender_spn_name: ICE-DataPower-Prod
+
+app_service_plan_sku:
+  tier: PremiumV2
+  size: P1v2
+  capacity: null
+  autoscale: true
+  autoscale_start_capacity: 3
+
+servicebus_sku:
+  sku: Premium
+  capacity: 1

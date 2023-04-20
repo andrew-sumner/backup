@@ -1,0 +1,48 @@
+trigger: none
+
+resources:
+  repositories:
+  - repository: templates
+    name: DevOpsTools/PipelineTemplates
+    type: git
+
+pool:
+  name: Default
+
+stages:
+- stage: Build
+
+  variables:
+  - group: Terraform Test Backend
+
+  jobs:
+  - job: buildTerraform
+    displayName: Build Terraform
+
+    steps:
+    - template: terraform-build.yml@templates
+      parameters:
+        backendServiceConnection: Azure Test Tenant
+        configurationDirectory: shared_resources
+
+    - task: PublishBuildArtifacts@1
+      displayName: Publish terraform artifact
+      inputs:
+        PathtoPublish: .
+        ArtifactName: terraform
+        publishLocation: Container
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: test
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/shared_resources
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: production
+    azureServiceConnection: Azure Prod Tenant
+    backendVariableGroup: Terraform Prod Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/shared_resources
+    #dependsOn: test  # Do not deploy to prod unless first gone through preprod

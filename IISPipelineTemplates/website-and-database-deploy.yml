@@ -1,0 +1,73 @@
+# Deploys a single webapp & database
+
+parameters:
+- name: environment
+  type: string
+# Database
+- name: databaseArtifact
+  type: string
+  default: database
+- name: dacpacFile
+  type: string
+- name: publishProfile
+  type: string
+- name: connectionString
+  type: string
+- name: blockOnDataLoss
+  type: boolean
+- name: notifyUsers
+  type: string
+- name: runAsUsername
+  type: string
+- name: runAsPassword
+  type: string  
+# Web App
+- name: webArtifact
+  type: string
+  default: drop
+- name: webSiteName
+  type: string
+- name: webDeployPackage
+  type: string
+- name: webDeployParamFile
+  type: string
+- name: webDeployOverrideParameters
+  type: string
+- name: appPoolUser
+  type: string
+- name: appPoolPassword
+  type: string
+- name: hostName
+  type: string
+- name: websitePhysicalPath
+  type: string
+- name: certificateThumbprint
+  type: string
+
+jobs:
+- template: database-deploy.yml
+  parameters:
+    environment: ${{ parameters.environment }}
+    databaseArtifact: ${{ parameters.databaseArtifact }}
+    dacpacFile: ${{ parameters.dacpacFile }}
+    publishProfile: ${{ parameters.publishProfile }}
+    connectionString: ${{ parameters.connectionString }}
+    blockOnDataLoss: ${{ parameters.blockOnDataLoss }}
+    notifyUsers: ${{ parameters.notifyUsers }}
+    runAsUsername: "${{ parameters.runAsUsername }}"
+    runAsPassword: "${{ parameters.runAsPassword }}"
+    
+- template: website-deploy.yml
+  parameters:
+    environment: ${{ parameters.environment }}
+    dependsOnDatabase: true
+    webArtifact: ${{ parameters.webArtifact }}
+    webSiteName: ${{ parameters.webSiteName }}
+    webDeployPackage: ${{ parameters.webDeployPackage }}
+    webDeployParamFile: ${{ parameters.webDeployParamFile }}
+    webDeployOverrideParameters: ${{ parameters.webDeployOverrideParameters }}
+    appPoolUser: ${{ parameters.appPoolUser }}
+    appPoolPassword: ${{ parameters.appPoolPassword }}
+    hostName: ${{ parameters.hostName }}
+    websitePhysicalPath: ${{ parameters.websitePhysicalPath }}
+    certificateThumbprint: ${{ parameters.certificateThumbprint }}

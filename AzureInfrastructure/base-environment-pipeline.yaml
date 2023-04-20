@@ -1,0 +1,94 @@
+trigger: none
+  # batch: true
+  # branches:    
+  #   include: 
+  #   - master
+
+resources:
+  repositories:
+  - repository: templates
+    name: DevOpsTools/PipelineTemplates
+    type: git
+
+pool:
+  name: Default
+
+stages:
+- stage: Build
+
+  variables:
+  - group: Terraform Test Backend
+
+  jobs:
+  - job: buildTerraform
+    displayName: Build Terraform
+
+    steps:
+    - template: terraform-build.yml@templates
+      parameters:
+        backendServiceConnection: Azure Test Tenant
+        configurationDirectory: base_environment
+
+    - task: PublishBuildArtifacts@1
+      displayName: Publish terraform artifact
+      inputs:
+        PathtoPublish: .
+        ArtifactName: terraform
+        publishLocation: Container
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: DevSupportTT
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: TestProdTT
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: ProdSupportTT
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: IceBreakers
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: Dev1TT
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: SugarandspICE
+    azureServiceConnection: Azure Test Tenant
+    backendVariableGroup: Terraform Test Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: PreProd
+    azureServiceConnection: Azure Prod Tenant
+    backendVariableGroup: Terraform Prod Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+
+- template: stage-terraform-approve-and-apply.yml@templates
+  parameters:
+    workspace: Prod
+    azureServiceConnection: Azure Prod Tenant
+    backendVariableGroup: Terraform Prod Backend
+    configurationDirectory: $(Pipeline.Workspace)/terraform/base_environment
+    dependsOn: PreProd  # Do not deploy to prod unless first gone through preprod

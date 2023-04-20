@@ -1,0 +1,32 @@
+trigger: none
+
+resources:
+  repositories:
+  - repository: templates
+    name: DevOpsTools/PipelineTemplates
+    type: git
+
+pool:
+  name: Default
+
+stages:
+
+- template: stage-terraform-backend-bootstrap.yml@templates
+  parameters:
+    envrionment: test
+    azureServiceConnection: Azure Test Tenant
+    resourceGroup: terraform-rg
+    location: australiasoutheast
+    storageAccount: satestterraform
+    container: tfstate
+    tags: Application ID = 908 `n Environment = Test `n Salary ID = M011759 `n Application Owner = Glen Bremner `n Squad Code = 2215 `n Squad Name = The IT Crowd
+
+- template: stage-terraform-backend-bootstrap.yml@templates
+  parameters:
+    envrionment: production
+    azureServiceConnection: Azure Prod Tenant
+    resourceGroup: terraform-rg
+    location: australiaeast
+    storageAccount: saprodterraform
+    container: tfstate
+    tags: Application ID = 908 `n Environment = Production `n Salary ID = M011759 `n Application Owner = Glen Bremner `n Squad Code = 2215 `n Squad Name = The IT Crowd

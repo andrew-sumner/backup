@@ -1,0 +1,111 @@
+# Purpose
+# -------
+# Stage template that builds a dotnetcore function app and associated terraform. 
+#
+
+parameters:
+- name: azureServiceConnection
+- name: backendVariableGroup
+- name: proxyVariableGroup        # No longer required, kept for backwards compatibility
+  default: ''
+- name: configurationDirectories  # List of directory names, due to limitation of yaml pipelines cannot dynamically generate this list, or export array from powershell
+  type: object
+- name: publishDirectory          # Defaults to first item in configuration directory, if have multiple directories then will default to parent directory
+  default: ""
+- name: buildSolution
+- name: publishProjects
+- name: sonarqubeServiceConnection
+- name: sonarqubeProjectKey
+- name: nugetConfigPath
+  type: string
+  default: 'nuget.config'
+- name: nuGetServiceConnections
+  type: object
+  default: ""
+
+stages:
+
+- stage: Build
+
+  variables:
+    - group: ${{ parameters.backendVariableGroup }}
+#    - group: ${{ parameters.proxyVariableGroup }}
+
+  jobs:
+  - job: buildApp
+    displayName: Build App
+
+    # https://docs.microsoft.com/en-us/azure/devops/pipelines/repos/azure-repos-git?view=azure-devops&tabs=yaml#limit-job-authorization-scope-to-referenced-azure-devops-repositories
+    # Ideally should be using this, however not supported in Azure Devops Server yet.
+    # Ensure Project Settings > Settings > Limit job authorization scope to referenced Azure DevOps repositories is off
+    #uses:
+    #  repositories: 
+    #  - global_vars
+
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+
+    - template: dotnetcore-build.yml
+      parameters:
+        buildConfiguration: Release
+        buildSolution: ${{ parameters.buildSolution }}
+        publishProjects: ${{ parameters.publishProjects }}
+        sonarqubeServiceConnection: ${{ parameters.sonarqubeServiceConnection }}
+        sonarqubeProjectKey: ${{ parameters.sonarqubeProjectKey }}
+        nugetConfigPath: ${{ parameters.nugetConfigPath }}
+        nuGetServiceConnections: ${{ parameters.nuGetServiceConnections }}
+            
+    - task: PublishBuildArtifacts@1
+      displayName: Publish drop artifact
+      inputs:
+        PathtoPublish: $(Build.ArtifactStagingDirectory)
+        ArtifactName: drop
+        publishLocation: Container
+
+  - job: buildTerraform
+    displayName: Build Terraform
+
+    steps:
+    - checkout: self
+      clean: true
+      persistCredentials: true
+
+    # Unfortunately it is impossible to dynamically generate a list of folders and iterate over that
+    - ${{ each configurationDirectory in parameters.configurationDirectories }}:
+      - template: terraform-build.yml
+        parameters:
+          backendServiceConnection: ${{ parameters.azureServiceConnection }}
+          configurationDirectory: ${{ configurationDirectory }}
+
+    - task: PowerShell@2
+      displayName: Get publish directory
+      inputs:
+        targetType: 'inline'
+        script: |
+          $configurationDirectories = ${env:configurationDirectories}
+          $configurationDirectories = $configurationDirectories.Split(',')
+          $publishDirectory = ${env:publishDirectory}
+
+          if (-not $publishDirectory) {
+              if ($configurationDirectories.count -eq 1) {
+                  $publishDirectory = $configurationDirectories[0]
+              } else {
+                  $publishDirectory = (Split-Path $configurationDirectories[0] -Parent)
+              }
+          }
+
+          Write-Host "Set TerraformDirectory to ${publishDirectory}"
+          Write-Host ("##vso[task.setvariable variable=TerraformDirectory]${publishDirectory}")
+      env:
+        configurationDirectories: ${{ join(',', parameters.configurationDirectories) }}
+        publishDirectory: ${{ parameters.publishDirectory }}
+          
+    - task: PublishBuildArtifacts@1
+      displayName: Publish terraform artifact
+      inputs:
+        #PathtoPublish: ${{ parameters.publishDirectory }}
+        PathtoPublish: $(TerraformDirectory)
+        ArtifactName: terraform
+        publishLocation: Container

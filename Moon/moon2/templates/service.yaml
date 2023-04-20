@@ -1,0 +1,55 @@
+---
+{{- $basicAuth := include "basic.auth" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  {{- if .Values.serviceAnnotations }}
+  annotations:
+  {{- range $key, $value := .Values.serviceAnnotations }}
+    {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.serviceLabels }}
+  labels:
+  {{- range $key, $value := .Values.serviceLabels }}
+    {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}
+spec:
+  selector:
+    app: {{ .Release.Name }}
+  ports:
+  - name: "moon"
+    protocol: TCP
+    port: 4444
+    {{- if $basicAuth }}
+      {{- if eq $basicAuth "openshift" }}
+    targetPort: 4545
+      {{- end }}
+    {{- end }}
+  - name: "moon-ui"
+    protocol: TCP
+    port: 8080
+    {{- if $basicAuth }}
+      {{- if eq $basicAuth "openshift" }}
+    targetPort: 8181
+      {{- end }}
+    {{- end }}
+  {{- if and (not .Values.ingress.enabled)  (not .Values.customIngress.enabled) }}
+  {{- if .Values.service }}
+  {{- if .Values.service.type }}
+  type: {{ .Values.service.type }}
+  {{- end }}
+  {{- if .Values.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.service.loadBalancerIP }}
+  {{- end }}
+  {{- with .Values.service.externalIPs }}
+  externalIPs:
+  {{- range . }}
+  - {{ . }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- end }}

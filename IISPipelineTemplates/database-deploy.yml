@@ -1,0 +1,106 @@
+# Checks for database changes and waits for approval if found # Stops App Pool and applies database changes
+
+parameters:
+- name: environment
+  type: string
+# Web App
+# List of strings
+- name: webAppNames
+  type: object
+  default: []
+# Database
+- name: databaseArtifact
+  type: string
+  default: database
+- name: dacpacFile
+  type: string
+- name: publishProfile
+  type: string
+- name: connectionString
+  type: string
+- name: blockOnDataLoss
+  type: boolean
+- name: notifyUsers
+  type: string
+- name: additionalArguments
+  type: string
+  default: ''
+- name: runAsUsername
+  type: string
+- name: runAsPassword
+  type: string
+
+jobs:
+- job: database_check
+  displayName: Database Change Check
+
+  steps:
+  - template: database-deployreport.yml
+    parameters:
+      artifactName: ${{ parameters.databaseArtifact }}
+      dacpacFile: ${{ parameters.dacpacFile }}
+      publishProfile: ${{ parameters.publishProfile }}
+      connectionString: ${{ parameters.connectionString }}
+      additionalArguments: "${{ parameters.additionalArguments }}"
+      runAsUsername: "${{ parameters.runAsUsername }}"
+      runAsPassword: "${{ parameters.runAsPassword }}"
+
+- job: database_approval
+  displayName: Database Change Approval
+  pool: server
+  dependsOn: database_check
+  condition: and(succeeded(), eq(dependencies.database_check.outputs['dacpacDeployReport.DBChangesDetected'], true))
+
+  steps:
+  - task: ManualValidation@0
+    timeoutInMinutes: 60 # task times out in 1 hour
+    inputs:
+      notifyUsers: ${{ parameters.notifyUsers }}
+      instructions: 'Please review the database change logs before proceeding. Approving this change means you have verified that the database changes will not do anything destructive.'
+
+- job: database_deploy
+  displayName: Deploy Database
+  dependsOn:
+  - database_check
+  - database_approval
+  condition: and(
+      in(dependencies.database_approval.result, 'Succeeded', 'SucceededWithIssues', 'Skipped'),
+      eq(dependencies.database_check.outputs['dacpacDeployReport.DBChangesDetected'], true)
+    )
+
+  steps:
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'current'
+      downloadType: 'single'
+      artifactName: '${{ parameters.databaseArtifact }}'
+      downloadPath: '$(Pipeline.Workspace)' #/${{ parameters.databaseArtifact }}'
+
+  # TODO Stopping the application pool - might be better to stop the web app - if can display offline notification
+  - ${{ each value in parameters.webAppNames }}:
+    - task: IISWebAppMgmt@3
+      displayName: Stop IIS Application Pool '${{ value }}'
+      inputs:
+        machinesList: '$(app_server)'
+        AdminUserName: '$(app_server_admin_username)'
+        AdminPassword: '$(app_server_admin_password)'
+        WinRMProtocol: 'Http'
+        IISDeploymentType: 'IISApplicationPool'
+        ActionIISApplicationPool: 'StopAppPool'
+        StartStopRecycleAppPoolName: '${{ value }}'
+        DeployInParallel: false
+      continueOnError: true
+
+  - task: DacpacDeploymentTasks@0
+    displayName: DacPac Publish
+    inputs:
+      Action: 'Publish'
+      DacpacFile: "$(Pipeline.Workspace)/${{ parameters.databaseArtifact }}/${{ parameters.dacpacFile }}"
+      PublishProfile: "$(Pipeline.Workspace)/${{ parameters.databaseArtifact }}/${{ parameters.publishProfile }}"
+      ConnectionString: "${{ parameters.connectionString }}"
+      AuthScheme: 'windowsAuthenticationRunAs'
+      RunAsUsername: "${{ parameters.runAsUsername }}"
+      RunAsPassword: "${{ parameters.runAsPassword }}"
+      BlockOnDataLoss: "${{ parameters.blockOnDataLoss }}"
+      OutputPath: "$(System.DefaultWorkingDirectory)/publishreport.xml"
+      AdditionalArguments: "${{ parameters.additionalArguments }}"

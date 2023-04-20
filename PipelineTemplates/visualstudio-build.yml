@@ -1,0 +1,43 @@
+# NOT TESTED DO NOT USE!
+
+parameters:
+# - name: NugetVersion
+#   type: string
+#   default: 6.0.0
+- name: SonarQubeProject
+  type: string
+- name: buildConfiguration
+  type: string
+  default: Release
+- name: BuildPlatform
+  type: string
+  default: any cpu
+- name: solution
+
+steps:          
+- template: proxy-configure.yml
+
+- task: NuGetToolInstaller@0
+  displayName: 'Use NuGet 6.0.0'
+  inputs:
+    versionSpec: 6.0.0
+
+# Nuget restore fails with proxy configured!
+- template: proxy-configure.yml
+
+- task: NuGetCommand@2
+  displayName: 'NuGet restore'
+  inputs:
+    restoreSolution: '${{ parameters.solution }}'
+    feedsToUse: config
+    nugetConfigPath: nuget.config
+
+- task: VSBuild@1
+  displayName: 'Build solution'
+  inputs:
+    solution: '${{ parameters.solution }}'
+    #vsVersion: 16.0
+    #msbuildArgs: ' /t:Restore;Build '
+    msbuildArgs: '/p:DeployOnBuild=true /p:DeployDefaultTarget=WebPublish /p:WebPublishMethod=FileSystem /p:publishUrl="$(Build.ArtifactStagingDirectory)\"'
+    platform: '$(BuildPlatform)'
+    configuration: '$(BuildConfiguration)'

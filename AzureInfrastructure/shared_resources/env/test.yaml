@@ -1,0 +1,6 @@
+azure_tenant: test
+environment_type: Test
+
+spn_owners: [
+  a806d99d-ab24-4564-861f-7343e3edbabf,  # Andrew Sumner
+]

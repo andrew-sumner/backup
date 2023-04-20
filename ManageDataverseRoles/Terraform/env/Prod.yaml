@@ -1,0 +1,4 @@
+azure_tenant: prod
+
+RemoveUsersFromTeamRole: True
+RemoveUsersFromSystemAdminRole: True

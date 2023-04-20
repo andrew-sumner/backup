@@ -1,0 +1,13 @@
+# Purpose
+# -------
+# Unset proxy environment variables
+
+steps:          
+- task: PowerShell@2
+  displayName: Configure proxy
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host ("##vso[task.setvariable variable=HTTP_PROXY]")
+      Write-Host ("##vso[task.setvariable variable=HTTPS_PROXY]")
+      Write-Host ("##vso[task.setvariable variable=NO_PROXY]")

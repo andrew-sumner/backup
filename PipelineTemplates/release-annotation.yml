@@ -1,0 +1,68 @@
+parameters:
+- name: applicationId
+- name: azureServiceConnection
+- name: name
+  default: $(Build.DefinitionName)-$(Build.BuildNumber)
+
+steps:
+- task: AzureCLI@2
+  displayName: 'Release Annotation'
+  inputs:
+    azureSubscription: '${{ parameters.azureServiceConnection }}'
+    addSpnToEnvironment: true
+    failOnStandardError: true
+    scriptType: ps
+    scriptLocation: inlineScript
+    inlineScript: |
+      $AppID = "${{ parameters.applicationId }}"
+      $Name = "${{ parameters.name }}"
+      
+      $body = @{
+          Id = [guid]::NewGuid()
+          AnnotationName = $Name
+          EventTime = [datetime]::UtcNow.ToString('s')
+          Category = 'Deployment'
+          Properties = @{
+              BuildNumber = $env:Build_BuildNumber
+              BuildRepositoryName = $env:Build_Repository_Name
+              BuildRepositoryProvider = $env:Build_Repository_Provider
+              BuildDefinitionName = $env:Build_DefinitionName
+              EnvironmentName = $env:Environment_Name
+              BuildId = $env:Build_BuildId
+              ReleaseName = $Name
+              BuildRequestedFor = $env:Build_RequestedForId
+              SourceBranch = $env:Build_SourceBranch
+              TeamFoundationCollectionUri = $env:System_TeamFoundationCollectionUri
+          } | ConvertTo-Json -Compress
+      } | ConvertTo-Json -Compress
+
+      # Prevent secret being saved to disk in clear text
+      Disable-AzContextAutosave -Scope Process
+
+      Write-Output "Connect to Azure: Tenant=$env:tenantId ServicePrincipal=$env:servicePrincipalId"
+      $secret = ConvertTo-SecureString $env:servicePrincipalKey -AsPlainText -Force
+      $psCred = [PSCredential]::new($env:servicePrincipalId, $secret)
+      Connect-AzAccount -Tenant $env:tenantId -Credential $psCred -ServicePrincipal
+
+      if ($AppID -like '/subscriptions/*/resourceGroups/*/providers/microsoft.insights/components/*') {
+          Write-Output "AppID is the resource id"
+          $id = $AppID
+      } else {
+          Write-Output "Get resource id from: AppID=$AppID"
+          $app = (Get-AzApplicationInsights) | Where-Object AppId -EQ $AppID
+          if (-not $app) {
+              Write-Error "No matching appinsights found"
+              exit 1
+          }
+          $id = $app.Id
+      }
+
+      Write-Output "Create Annotation: ResourceID=$id"
+      Write-Verbose "Create Annotation: Payload=$body"
+      $res = Invoke-AzRestMethod -Method PUT -Path "$id/Annotations?api-version=2015-05-01" -Payload $body
+      if ($res.StatusCode -eq 200) {
+          Write-Output $res.Content
+      } else {
+          Write-Error ("Failed to create annotation: StatusCode={0} Content={1}" -f $res.StatusCode, $res.Content)
+          exit 1
+      }

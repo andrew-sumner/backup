@@ -1,0 +1,74 @@
+# Purpose
+# -------
+# Stage template that applies a terraform configuration, with an approval step after the plan
+#
+# Unfortunatley service connections are treated differently in yaml pipelines so have been unable to use a service connection declared in a variable group.
+
+parameters:
+- name: configurationDirectory
+- name: workspace
+- name: azureServiceConnection
+- name: backendVariableGroup
+- name: proxyVariableGroup        # No longer required, kept for backwards compatibility
+  default: ''
+- name: notifyUsers
+  default: $(Release.RequestedForEmail)
+- name: dependsOn
+  type: string
+  default: Build
+    # []  # this removes the implicit dependency on previous stage and causes this to run in parallel
+
+stages:
+- stage: ${{ parameters.workspace }}
+  dependsOn: ${{ parameters.dependsOn }}
+
+  variables:
+    - group: ${{ parameters.backendVariableGroup }}
+#    - group: ${{ parameters.proxyVariableGroup }}
+
+  jobs:
+  - deployment: terraformPlan
+    displayName: Plan
+    
+    environment: ${{ parameters.workspace }}
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: terraform-apply.yml
+            parameters:
+              backendServiceConnection: ${{ parameters.azureServiceConnection }}
+              configurationDirectory: ${{ parameters.configurationDirectory }}
+              workspace: ${{ parameters.workspace }}
+              performApply: false
+
+  - job: terraformApprove
+    displayName: Approve
+    pool: server
+    dependsOn: terraformPlan
+
+    steps:
+    - task: ManualValidation@0
+      timeoutInMinutes: 60 # task times out in 1 hour
+      inputs:
+        notifyUsers: |
+          ${{ parameters.notifyUsers }}
+        instructions: 'Please review and approve the terraform plan output'
+
+  - deployment: deployPlan
+    displayName: Apply
+    dependsOn: terraformApprove
+
+    environment: ${{ parameters.workspace }}
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: terraform-apply.yml
+            parameters:
+              backendServiceConnection: ${{ parameters.azureServiceConnection }}
+              configurationDirectory: ${{ parameters.configurationDirectory }}
+              workspace: ${{ parameters.workspace }}
+              performApply: true      

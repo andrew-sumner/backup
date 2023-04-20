@@ -1,0 +1,31 @@
+# Extracts ALL secrets from a hashicorp key vault and sets them as pipeline variables
+
+parameters:
+- name: namespace
+  type: string
+- name: username
+  type: string
+- name: password
+  type: string
+  # path of keyvault engine, e.g. 'kv'
+- name: enginePath
+  type: string
+  # secret path of keyvault engine, e.g. 'sevice_accounts'
+- name: secretPath
+  type: string
+
+steps:
+- task: VaultReadKV@4
+  inputs:
+    strUrl: 'https://vault.westpac.co.nz/'
+    ignoreCertificateChecks: false
+    useProxy: 'none'
+    strNamespaces: ${{ parameters.namespace }}
+    strAuthType: 'ldap'
+    strUsername: ${{ parameters.username }}
+    strPassword: ${{ parameters.password }}
+    strKVEnginePath: ${{ parameters.enginePath }}
+    kvVersion: 'v2'
+    strSecretPath: ${{ parameters.secretPath }}
+    strPrefixType: 'none'
+    replaceCR: false

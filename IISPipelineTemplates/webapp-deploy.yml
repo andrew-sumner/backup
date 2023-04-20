@@ -1,0 +1,63 @@
+# Deploys a Web application, optionally checking for database approval
+
+parameters:
+- name: environment
+  type: string
+# If this is dependant on database deploy, set dependsOnDatabase to true
+- name: dependsOnDatabase
+  type: boolean
+  default: false
+- name: webArtifact
+  type: string
+  default: drop
+- name: webAppName
+  type: string
+- name: webDeployPackage
+  type: string
+- name: webDeployParamFile
+  type: string
+- name: webDeployOverrideParameters
+  type: string
+- name: appPoolIdentityForApplication
+  type: string
+  default: 'SpecificUser'
+- name: appPoolUser
+  type: string
+- name: appPoolPassword
+  type: string
+
+jobs:
+- deployment: deploy_${{ parameters.webAppName }}
+  displayName: Deploy '${{ parameters.webAppName }}'
+  environment: ${{ parameters.environment }}
+  ${{ if eq(parameters.dependsOnDatabase, 'true') }}:
+    dependsOn:
+    - database_check
+    - database_approval
+    - database_deploy
+    condition: and(
+        eq(dependencies.database_check.result, 'Succeeded'),
+        in(dependencies.database_approval.result, 'Succeeded', 'SucceededWithIssues', 'Skipped'),
+        in(dependencies.database_deploy.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+      )
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: '${{ parameters.webArtifact }}'
+            downloadPath: '$(Pipeline.Workspace)' #/${{ parameters.webArtifact }}'
+
+        - template: iis-webapp-deploy.yml
+          parameters:
+            webArtifact: ${{ parameters.webArtifact }}
+            webAppName: ${{ parameters.webAppName }}
+            webDeployPackage: ${{ parameters.webDeployPackage }}
+            webDeployParamFile: ${{ parameters.webDeployParamFile }}
+            webDeployOverrideParameters: ${{ parameters.webDeployOverrideParameters }}
+            appPoolIdentityForApplication: ${{ parameters.appPoolIdentityForApplication }}
+            appPoolUser: ${{ parameters.appPoolUser }}
+            appPoolPassword: ${{ parameters.appPoolPassword }}

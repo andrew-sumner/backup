@@ -1,0 +1,72 @@
+# Purpose
+# -------
+# Designed to be used in a build stage, will build a dotnet core application.
+
+parameters:
+- name: sonarqubeServiceConnection
+  type: string
+  default: WestpacSonarQube
+- name: sonarqubeProjectKey
+  type: string
+- name: buildConfiguration
+  type: string
+  default: Release
+- name: buildPlatform
+  type: string
+  default: any cpu
+- name: buildSolution
+  type: string
+- name: publishProjects
+  type: object
+  default: ""
+- name: nugetConfigPath
+  type: string
+  default: 'nuget.config'
+- name: nuGetServiceConnections
+  type: object
+  default: ""
+
+steps:          
+
+- task: SonarQubePrepare@4
+  displayName: Prepare code analysis
+  inputs:
+    SonarQube: '${{ parameters.sonarqubeServiceConnection }}'
+    scannerMode: 'MSBuild'
+    projectKey: '${{ parameters.sonarqubeProjectKey }}'
+
+- task: DotNetCoreCLI@2
+  displayName: Restore
+  inputs:
+   command: 'restore'
+   feedsToUse: 'config'
+   nugetConfigPath: '${{ parameters.nugetconfigPath }}'
+   projects: '${{ parameters.buildSolution }}'
+   externalFeedCredentials: '${{ parameters.nuGetServiceConnections }}'
+
+- task: DotNetCoreCLI@2
+  displayName: Build
+  inputs:
+   command: 'build'
+   projects: '${{ parameters.buildSolution }}'
+   arguments: '--configuration ${{ parameters.buildConfiguration }}'
+
+# TODO Change this to a step that can be passed in?
+- task: DotNetCoreCLI@2
+  displayName: Publish
+  condition: and(succeeded(), ne('${{ parameters.publishProjects }}', ''))
+  inputs:
+    command: 'publish'
+    publishWebProjects: false
+    projects: |
+      ${{ parameters.publishProjects }}
+    arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(Build.ArtifactStagingDirectory)'
+    zipAfterPublish: True
+
+- task: SonarQubeAnalyze@4
+  displayName: Run code analysis
+
+- task: SonarQubePublish@4
+  displayName: Publish quality gate result
+  inputs:
+    pollingTimeoutSec: '300'

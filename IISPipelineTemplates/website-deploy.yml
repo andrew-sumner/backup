@@ -1,0 +1,77 @@
+# Deploys a Web application, optionally checking for database approval
+
+parameters:
+- name: environment
+  type: string
+# If this is dependant on database deploy, set dependsOnDatabase to true
+- name: dependsOnDatabase
+  type: boolean
+  default: false
+- name: webArtifact
+  type: string
+  default: drop
+- name: webSiteName
+  type: string
+- name: webDeployPackage
+  type: string
+- name: webDeployParamFile
+  type: string
+- name: webDeployOverrideParameters
+  type: string
+- name: appPoolIdentityForApplication
+  type: string
+  default: 'SpecificUser'
+- name: appPoolUser
+  type: string
+# - name: appPoolPassword
+#   type: string
+- name: hostName
+  type: string
+- name: websitePhysicalPath
+  type: string
+- name: certificateThumbprint
+  type: string
+- name: predeploySteps
+  type: stepList
+  default: []
+
+jobs:
+- deployment: deploy_${{ parameters.webSiteName }}
+  displayName: Deploy '${{ parameters.webSiteName }}'
+  environment: ${{ parameters.environment }}
+  ${{ if eq(parameters.dependsOnDatabase, 'true') }}:
+    dependsOn:
+    - database_check
+    - database_approval
+    - database_deploy
+    condition: and(
+        eq(dependencies.database_check.result, 'Succeeded'),
+        in(dependencies.database_approval.result, 'Succeeded', 'SucceededWithIssues', 'Skipped'),
+        in(dependencies.database_deploy.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+      )
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - task: DownloadBuildArtifacts@0
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: '${{ parameters.webArtifact }}'
+            downloadPath: '$(Pipeline.Workspace)' #/${{ parameters.webArtifact }}'
+
+        - ${{ parameters.predeploySteps }}
+
+        - template: iis-website-deploy.yml
+          parameters:
+            webArtifact: ${{ parameters.webArtifact }}
+            webSiteName: ${{ parameters.webSiteName }}
+            webDeployPackage: ${{ parameters.webDeployPackage }}
+            webDeployParamFile: ${{ parameters.webDeployParamFile }}
+            webDeployOverrideParameters: ${{ parameters.webDeployOverrideParameters }}
+            appPoolIdentityForApplication: ${{ parameters.appPoolIdentityForApplication }}
+            appPoolUser: ${{ parameters.appPoolUser }}
+            appPoolPassword: $(appPoolPassword)
+            hostName: ${{ parameters.hostName }}
+            websitePhysicalPath: ${{ parameters.websitePhysicalPath }}
+            certificateThumbprint: ${{ parameters.certificateThumbprint }}

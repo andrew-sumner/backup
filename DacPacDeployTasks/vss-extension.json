@@ -1,0 +1,41 @@
+{
+    "manifestVersion": 1,
+    "id": "DacpacDeploymentTasks",
+    "name": "SQL Server DacPac deployment tasks",
+    "version": "0.19.0",
+    "publisher": "Westpac",
+    "targets": [
+        {
+            "id": "Microsoft.VisualStudio.Services"
+        }
+    ],
+    "description": "SQL Server database DACPAC deployment tasks.",
+    "categories": [
+        "Azure Pipelines"
+    ],
+    "icons": {
+        "default": "icon.png"
+    },
+    "content": {
+        "details": {
+            "path": "README.md"
+        }
+    },
+    "files": [
+        {
+            "path": "DacpacTask"
+        }
+    ],
+    "contributions": [
+        {
+            "id": "dacpac-task",
+            "type": "ms.vss-distributed-task.task",
+            "targets": [
+                "ms.vss-distributed-task.tasks"
+            ],
+            "properties": {
+                "name": "DacpacTask"
+            }
+        }
+    ]
+}

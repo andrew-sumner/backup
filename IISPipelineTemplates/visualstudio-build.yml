@@ -1,0 +1,135 @@
+parameters:
+  # VS2019=16.0, VS2022=17.0
+- name: visualStudioVersion
+  type: string
+  default: 17.0
+
+  # This overrides msbuild argumnet ProjectParametersXMLFile allowing build to specify a custom packages.xml path
+  # This is to support HBL.DocumentBrowser which is sharing parameters.xml and appSettings acrosss multiple projects.
+- name: projectParametersXMLFile
+  type: string
+  default: parameters.xml
+
+  # Default is suitable for web applications, override for other application types
+- name: msbuildArgs
+  type: string
+  default: /p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:PackageLocation="$(Build.ArtifactStagingDirectory)\\"
+
+  # Appends to msbuildArgs, for example /p:ProjectParametersXMLFile="..\path\to\parameters.xml"
+- name: msbuildArgsAppend
+  type: string
+  default: ''
+
+  # Disable the publish step
+- name: skipPublishStep
+  type: boolean
+  default: false
+
+  # Provide additional post build steps, eg custom artifacts
+- name: additionalSteps
+  type: stepList
+  default: []
+
+- name: nugetConfigPath
+  type: string
+  default: 'nuget.config'
+
+- name: sonarqubeServiceConnection
+  type: string
+  default: WestpacSonarQube
+
+- name: sonarqubeProjectKey
+  type: string
+
+- name: sonarExtraProperties
+  type: string
+  default: ''
+
+jobs:
+- job: build
+  displayName: Build
+
+  steps:
+  - checkout: self
+    clean: true
+
+  # - task: NuGetToolInstaller@0
+  #   displayName: Use NuGet 4.4.1
+  #   inputs:
+  #     versionSpec: 4.4.1
+
+  # - task: NuGetAuthenticate@1
+  #   displayName: 'Authenticate with azure artifact'
+  #   inputs:
+  #     forceReinstallCredentialProvider: true
+
+  - template: proxy-configure.yml
+
+  - task: NuGetToolInstaller@0
+    displayName: 'Use NuGet 6.0.0'
+    inputs:
+      versionSpec: 6.0.0
+
+  - task: NuGetCommand@2
+    displayName: NuGet restore
+    inputs:
+      solution: $(BuildSolution)
+      # feedsToUse: 'select'
+      # vstsFeed: 'Westpac.ICE'
+      feedsToUse: 'config'
+      nugetConfigPath: '${{ parameters.nugetconfigPath }}'
+
+  # - task: SonarQubePrepare@4
+  #   displayName: Prepare code analysis
+  #   inputs:
+  #     SonarQube: '${{ parameters.sonarqubeServiceConnection }}'
+  #     scannerMode: 'MSBuild'
+  #     projectKey: '${{ parameters.sonarqubeProjectKey }}'
+  #     extraProperties: '${{ parameters.sonarExtraProperties }}'
+
+  #- task: VSBuild@1
+  # to do if statement required 
+  - task: VSBuild-sxs@1
+    displayName: Build solution
+    inputs:
+      vsVersion: ${{ parameters.visualStudioVersion }}
+      solution: $(BuildSolution)
+      msbuildArgs: ${{ parameters.msbuildArgs }} ${{ parameters.msbuildArgsAppend }}
+      platform: $(BuildPlatform)
+      configuration: $(BuildConfiguration)
+
+  # - task: SonarQubeAnalyze@4
+  #   displayName: Run code analysis
+
+  # - task: SonarQubePublish@4
+  #   displayName: Publish quality gate result
+  #   inputs:
+  #     pollingTimeoutSec: '300'
+      
+  # TODO Uncomment this
+  # - task: VSTest@2
+  #   displayName: Test Assemblies
+  #   inputs:
+  #     testAssemblyVer2: >-
+  #       **\$(BuildConfiguration)\*test*.dll
+  #       !**\obj\**
+  #     platform: $(BuildPlatform)
+  #     configuration: $(BuildConfiguration)
+
+  # - task: PublishSymbols@2
+  #   displayName: Publish symbols path
+  #   continueOnError: True
+  #   inputs:
+  #     SearchPattern: '**\bin\**\*.pdb'
+  #     PublishSymbols: false
+  #     SymbolServerType: TeamServices
+
+  - ${{ if eq(parameters.skipPublishStep, false) }}:
+    - task: PublishBuildArtifacts@1
+      displayName: Publish artifact 'drop'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+        
+  - ${{ parameters.additionalSteps }}

@@ -1,0 +1,147 @@
+parameters:
+# Web Site
+- name: webArtifact
+  type: string
+- name: webSiteName
+  type: string
+# - name: artifactFolder
+#   type: string  
+- name: webDeployPackage
+  type: string
+- name: webDeployParamFile
+  type: string
+- name: webDeployOverrideParameters
+  type: string
+- name: appPoolIdentityForApplication
+  type: string
+  default: 'SpecificUser'
+- name: appPoolUser
+  type: string
+- name: appPoolPassword
+  type: string
+- name: hostName
+  type: string
+- name: websitePhysicalPath
+  type: string
+- name: certificateThumbprint
+  type: string
+
+steps:
+# - template: vault-credential.yml
+#   parameters:
+#     resource: www.test.com
+#     account: TestUser
+
+- task: PowerShell@2
+  displayName: Debug
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "MachineNames: '$(app_server)'"
+      Write-Host "AdminUserName: '$(app_server_admin_username)'"
+      Write-Host "AdminPassword: '$(app_server_admin_password)'"
+
+      Write-Host "appPoolUser: '${{ parameters.appPoolUser }}'"
+      Write-Host "appPoolPassword: '${{ parameters.appPoolPassword }}'"
+  enabled: true
+
+- task: WindowsMachineFileCopy@2
+  displayName: 'Copy zip file from artifact source'
+  inputs:
+    SourcePath: '$(Pipeline.Workspace)/${{ parameters.webArtifact }}'
+    MachineNames: '$(app_server)'
+    AdminUserName: '$(app_server_admin_username)'
+    AdminPassword: '$(app_server_admin_password)'
+    TargetPath: 'C:\Temp\Install\${{ parameters.webSiteName }}'
+    CleanTargetBeforeCopy: true
+
+# - task: CopyFiles@2
+#   displayName: 'Copy Files to: \\${{ parameters.artifactFolder }}'
+#   inputs:
+#     SourceFolder: '$(Pipeline.Workspace)/${{ parameters.webArtifact }}/'
+#     Contents: |
+#       *.zip
+#       *SetParameters.xml
+#     TargetFolder: '\\$(app_server)\Transfer\${{ parameters.webSiteName }}'
+#     CleanTargetFolder: true
+
+# - task: IISWebAppMgmt@3
+#   displayName: Stop IIS Application Pool
+#   inputs:
+#     machinesList: '$(app_server)'
+#     AdminUserName: '$(app_server_admin_username)'
+#     AdminPassword: '$(app_server_admin_password)'
+#     WinRMProtocol: 'Http'
+#     IISDeploymentType: 'IISApplicationPool'
+#     ActionIISApplicationPool: 'StopAppPool'
+#     StartStopRecycleAppPoolName: '${{ parameters.webSiteName }}'
+#     DeployInParallel: false
+#   continueOnError: true
+
+- task: IISWebAppMgmt@3
+  displayName: Deploy IIS Web Application
+  inputs:
+    machinesList: '$(app_server)'
+    AdminUserName: '$(app_server_admin_username)'
+    AdminPassword: '$(app_server_admin_password)'
+    WinRMProtocol: 'Http'
+    IISDeploymentType: 'IISWebApplication'
+    ParentWebsiteNameForApplication: 'Default Web Site'
+    VirtualPathForApplication: '/${{ parameters.webSiteName }}'
+    PhysicalPathForApplication: '%SystemDrive%\inetpub\wwwroot\${{ parameters.webSiteName }}'
+    CreateOrUpdateAppPoolForApplication: true
+    AppPoolNameForApplication: '${{ parameters.webSiteName }}'
+    DotNetVersionForApplication: 'v4.0'
+    PipeLineModeForApplication: 'Integrated'
+    AppPoolIdentityForApplication: '${{ parameters.appPoolIdentityForApplication }}'
+    AppPoolUsernameForApplication: '${{ parameters.appPoolUser }}'
+    AppPoolPasswordForApplication: '${{ parameters.appPoolPassword }}'
+
+- task: IISWebAppMgmt@3
+  displayName: Create or Update IIS Web Site
+  inputs:
+    machinesList: '$(app_server)'
+    AdminUserName: '$(app_server_admin_username)'
+    AdminPassword: '$(app_server_admin_password)'
+    WinRMProtocol: 'Http'
+    IISDeploymentType: 'IISWebsite'
+    ActionIISWebsite: 'CreateOrUpdateWebsite'
+    WebsiteName: '${{ parameters.webSiteName }}'
+    WebsitePhysicalPath: '${{ parameters.websitePhysicalPath }}'
+    WebsitePhysicalPathAuth: 'WebsiteUserPassThrough'
+    AddBinding: true
+    Protocol: 'https'
+    IPAddress: 'All Unassigned'
+    Port: '443'
+    HostNameWithOutSNI: '${{ parameters.hostName }}'
+    SSLCertThumbPrint: '${{ parameters.certificateThumbprint }}'
+
+- task: IISWebAppDeploy@1
+  displayName: Deploy IIS App
+  inputs:
+    machinesList: '$(app_server)'
+    AdminUserName: '$(app_server_admin_username)'
+    AdminPassword: '$(app_server_admin_password)'
+    WinRMProtocol: 'Http'
+    WebDeployPackage: 'C:\Temp\Install\${{ parameters.webSiteName }}\${{ parameters.webDeployPackage }}'
+    WebDeployParamFile: 'C:\Temp\Install\${{ parameters.webSiteName }}\${{ parameters.webDeployParamFile }}'
+    OverRideParams: '${{ parameters.webDeployOverrideParameters }}'
+    WebsiteName: 'Default Web Site/${{ parameters.webSiteName }}'
+    TakeAppOffline: true
+
+- task: IISWebAppMgmt@3
+  displayName: Start IIS Application Pool
+  inputs:
+    machinesList: '$(app_server)'
+    AdminUserName: '$(app_server_admin_username)'
+    AdminPassword: '$(app_server_admin_password)'
+    WinRMProtocol: 'Http'
+    IISDeploymentType: 'IISApplicationPool'
+    ActionIISApplicationPool: 'StartAppPool'
+    StartStopRecycleAppPoolName: '${{ parameters.webSiteName }}'
+    DeployInParallel: false
+
+- powershell: |
+    Write-Host "Website deployed to http://$(app_server)/${{ parameters.webSiteName }}"
+  displayName: Website URL
+
